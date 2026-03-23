@@ -1,90 +1,160 @@
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
-ADMIN_ID = 312757194
+
 TOKEN = "vk1.a.2jU3Z96fiZcGSjidO2iXaNEfDx7Fx5tbbW2ChJ_gZUCXLpPe5fQgAV-88leU74OqIp230eMv1qx3S_abW1POGqI1fen5YNh2rLnC4KB3LtwJqJXA48N22e_4VtxWeQMp5DRPt3TAQjC6aPbeWKVXtD1aHbuFWyEJoQRVtL4rfGUFyowMMVwMdyKaQU7UZU6ziXJYAkYVVEqDKpOoeo_m0w"
+ADMIN_ID = 312757194  # твой VK ID
 
 vk_session = vk_api.VkApi(token=TOKEN)
 vk = vk_session.get_api()
 longpoll = VkLongPoll(vk_session)
 
-users = {}
+users = {}  # здесь храним состояние пользователей
 
-def brand_keyboard():
-    kb = VkKeyboard()
-    kb.add_button("Nike", VkKeyboardColor.PRIMARY)
-    kb.add_button("Adidas", VkKeyboardColor.PRIMARY)
+def main_menu_keyboard():
+    kb = VkKeyboard(one_time=False)
+    kb.add_button("Частые вопросы", VkKeyboardColor.PRIMARY)
     kb.add_line()
-    kb.add_button("FAQ", VkKeyboardColor.SECONDARY)
+    kb.add_button("Заказ", VkKeyboardColor.POSITIVE)
     return kb.get_keyboard()
 
 def size_keyboard():
-    kb = VkKeyboard()
-    kb.add_button("40", VkKeyboardColor.PRIMARY)
-    kb.add_button("41", VkKeyboardColor.PRIMARY)
-    kb.add_button("42", VkKeyboardColor.PRIMARY)
-    kb.add_button("43", VkKeyboardColor.PRIMARY)
-    kb.add_line()
-    kb.add_button("FAQ", VkKeyboardColor.SECONDARY)
+    kb = VkKeyboard(one_time=True)
+    sizes = [str(x) for x in range(35, 46)]
+    for i, s in enumerate(sizes):
+        kb.add_button(s, VkKeyboardColor.PRIMARY)
+        if (i + 1) % 5 == 0:
+            kb.add_line()
     return kb.get_keyboard()
 
 for event in longpoll.listen():
     if event.type == VkEventType.MESSAGE_NEW and event.to_me:
+        user_id = event.user_id
+        text = event.text.strip()
 
-        user = event.user_id
-        text = event.text
-
-        if text.lower() == "faq":
+        if user_id not in users:
+            # Новый пользователь – показываем главное меню
+            users[user_id] = {"step": 0}
             vk.messages.send(
-                user_id=user,
-                message="📦 Доставка 3-5 дней\n💰 Оплата при получении\n🔁 Обмен есть",
+                user_id=user_id,
+                message="👋 Привет! Выбери действие:",
                 random_id=0,
-                keyboard=brand_keyboard()
+                keyboard=main_menu_keyboard()
             )
             continue
 
-        if user not in users:
-            vk.messages.send(
-                user_id=user,
-                message="Привет 👟 Выбери бренд",
-                random_id=0,
-                keyboard=brand_keyboard()
-            )
-            users[user] = {}
-            continue
+        step = users[user_id]["step"]
 
-        if text in ["Nike", "Adidas"]:
-            users[user]["brand"] = text
+        if step == 0:
+            # Главная кнопка меню
+            if text == "Частые вопросы":
+                vk.messages.send(
+                    user_id=user_id,
+                    message=(
+                        "📦 Доставка 9-15 дней\n"
+                        "💰 Товар оплачивается сразу\n"
+                        "🚚 Доставка оплачивается отдельно (800 руб/кг)\n"
+                        "💵 Наша комиссия - 15%\n"
+                    ),
+                    random_id=0,
+                    keyboard=main_menu_keyboard()
+                )
+                continue
 
+            elif text == "Заказ":
+                users[user_id]["step"] = 1
+                vk.messages.send(
+                    user_id=user_id,
+                    message="👟 Введите название модели кроссовок:",
+                    random_id=0
+                )
+                continue
+            else:
+                vk.messages.send(
+                    user_id=user_id,
+                    message="Выберите кнопку из меню.",
+                    random_id=0,
+                    keyboard=main_menu_keyboard()
+                )
+                continue
+
+        # Шаги для оформления заказа
+        if step == 1:
+            users[user_id]["model"] = text
+            users[user_id]["step"] = 2
             vk.messages.send(
-                user_id=user,
-                message="Выбери размер",
+                user_id=user_id,
+                message="📏 Выберите размер EU:",
                 random_id=0,
                 keyboard=size_keyboard()
             )
             continue
 
-        if text in ["40", "41", "42", "43"]:
-            brand = users[user]["brand"]
-            size = text
+        if step == 2:
+            if text.isdigit():
+                users[user_id]["eu"] = text
+                users[user_id]["step"] = 3
+                vk.messages.send(
+                    user_id=user_id,
+                    message="📏 Напишите размер стельки в см:",
+                    random_id=0
+                )
+                continue
+            else:
+                vk.messages.send(
+                    user_id=user_id,
+                    message="Пожалуйста, введите число для размера EU.",
+                    random_id=0,
+                    keyboard=size_keyboard()
+                )
+                continue
 
-            # запись заказа
-            with open("orders.txt", "a", encoding="utf-8") as f:
-                f.write(f"{user} | {brand} | {size}\n")
-
-            # уведомление админу
+        if step == 3:
+            users[user_id]["insole"] = text
+            users[user_id]["step"] = 4
             vk.messages.send(
-                user_id=ADMIN_ID,
-                message=f"🔥 Новый заказ\nКлиент: https://vk.com/id{user}\n{brand} размер {size}",
+                user_id=user_id,
+                message="📸 Прикрепите фото товара (или напишите 'нет'):",
                 random_id=0
             )
-            
+            continue
 
+        if step == 4:
+            photo_status = "нет фото"
+            if event.attachments:
+                photo_status = "есть фото"
+
+            model = users[user_id]["model"]
+            eu = users[user_id]["eu"]
+            insole = users[user_id]["insole"]
+
+            order_text = f"{user_id} | {model} | EU {eu} | Стелька {insole} | {photo_status}\n"
+
+            # Сохраняем заказ в файл
+            with open("orders.txt", "a", encoding="utf-8") as f:
+                f.write(order_text)
+
+            # Отправляем администратору
             vk.messages.send(
-                user_id=user,
-                message=f"✅ Заказ принят\n{brand} размер {size}\nМенеджер скоро напишет",
-                random_id=0,
-                keyboard=brand_keyboard()
+                user_id=ADMIN_ID,
+                message=(
+                    f"🔥 Новый заказ!\n"
+                    f"https://vk.com/id{user_id}\n"
+                    f"Модель: {model}\n"
+                    f"EU: {eu}\n"
+                    f"Стелька: {insole}\n"
+                    f"{photo_status}"
+                ),
+                random_id=0
             )
 
-            del users[user]
+            # Подтверждаем пользователю
+            vk.messages.send(
+                user_id=user_id,
+                message="✅ Заказ принят! Менеджер скоро свяжется.",
+                random_id=0,
+                keyboard=main_menu_keyboard()
+            )
+
+            # Сбрасываем пользователя в главное меню
+            del users[user_id]
