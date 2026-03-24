@@ -56,7 +56,7 @@ for event in longpoll.listen():
             users[user_id] = {"step": 0}
             vk.messages.send(
                 user_id=user_id,
-                message="👋 Рады видеть вас здесь!"
+                message="👋 Рады видеть вас здесь!\n"
                         "⬇️ Выберите действие ниже",
                 random_id=0,
                 keyboard=main_menu_keyboard()
