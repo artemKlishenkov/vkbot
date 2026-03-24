@@ -16,7 +16,16 @@ def main_menu_keyboard():
     kb.add_button("Частые вопросы", VkKeyboardColor.PRIMARY)
     kb.add_line()
     kb.add_button("Заказ", VkKeyboardColor.POSITIVE)
+    kb.add_button("О нас", VkKeyboardColor.SECONDARY) 
     return kb.get_keyboard()
+
+def wrong_input(user_id, keyboard=None):
+    vk.messages.send(
+        user_id=user_id,
+        message="❗Пожалуйста, используйте кнопки или введите корректные данные.",
+        random_id=0,
+        keyboard=keyboard
+    )
 
 def size_keyboard():
     kb = VkKeyboard(one_time=True)
@@ -69,6 +78,14 @@ for event in longpoll.listen():
                     random_id=0
                 )
                 continue
+            elif text == "О нас":
+                vk.messages.send(
+                    user_id=user_id,
+                    message="👟 О нас:\nДоставляем кроссовки на заказ.",
+                    random_id=0,
+                    keyboard=main_menu_keyboard()
+                )
+                continue
             else:
                 vk.messages.send(
                     user_id=user_id,
@@ -91,7 +108,7 @@ for event in longpoll.listen():
             continue
 
         if step == 2:
-            if text.isdigit():
+            if text.isdigit() and 35 <= int(text) <= 45:
                 users[user_id]["eu"] = text
                 users[user_id]["step"] = 3
                 vk.messages.send(
@@ -99,30 +116,28 @@ for event in longpoll.listen():
                     message="📏 Напишите размер стельки в см:",
                     random_id=0
                 )
-                continue
             else:
-                vk.messages.send(
-                    user_id=user_id,
-                    message="Пожалуйста, введите число для размера EU.",
-                    random_id=0,
-                    keyboard=size_keyboard()
-                )
-                continue
+                wrong_input(user_id, size_keyboard())
+            continue
 
         if step == 3:
-            users[user_id]["insole"] = text
-            users[user_id]["step"] = 4
-            vk.messages.send(
-                user_id=user_id,
-                message="📸 Прикрепите фото товара (или напишите 'нет'):",
-                random_id=0
-            )
+            try:
+                float(text.replace(",", "."))
+                users[user_id]["insole"] = text
+                users[user_id]["step"] = 4
+                vk.messages.send(
+                    user_id=user_id,
+                    message="📸 Прикрепите фото товара (или напишите 'нет'):",
+                    random_id=0
+                )
+            except:
+                wrong_input(user_id)
             continue
 
         if step == 4:
-            photo_status = "нет фото"
-            if event.attachments:
-                photo_status = "есть фото"
+            if not event.attachments and text.lower() != "нет":
+                wrong_input(user_id)
+                continue
 
             model = users[user_id]["model"]
             eu = users[user_id]["eu"]
