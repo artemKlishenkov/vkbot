@@ -143,7 +143,7 @@ for event in longpoll.listen():
                 users[user_id]["step"] = "custom_question"
                 vk.messages.send(
                     user_id=user_id,
-                    message="✏️ Напишите ваш вопрос, и менеджер свяжется с вами:",
+                    message="Задайте сюда свой вопрос и мы с удовольствием ответим на него🙌🏻",
                     random_id=0
                 )
                 continue
