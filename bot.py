@@ -12,8 +12,16 @@ longpoll = VkLongPoll(vk_session)
 
 users = {}  # состояние пользователей
 
-# Главное меню
-def main_menu_keyboard():
+# Главное меню (без кнопки Заказ)
+def main_menu_keyboard_no_order():
+    kb = VkKeyboard(one_time=False)
+    kb.add_button("Частые вопросы", VkKeyboardColor.PRIMARY)
+    kb.add_line()
+    kb.add_button("О нас", VkKeyboardColor.SECONDARY)
+    return kb.get_keyboard()
+
+# Главное меню (полное, с кнопкой Заказ)
+def main_menu_keyboard_full():
     kb = VkKeyboard(one_time=False)
     kb.add_button("Частые вопросы", VkKeyboardColor.PRIMARY)
     kb.add_line()
@@ -52,21 +60,29 @@ for event in longpoll.listen():
         user_id = event.user_id
         text = event.text.strip()
 
+        # Инициализация пользователя, если его нет
         if user_id not in users:
-            users[user_id] = {"step": 0}
+            users[user_id] = {
+                "step": 0,
+                "has_ordered": False  # флаг, делал ли пользователь заказ
+            }
+            # Если пользователь новый и еще не делал заказ, показываем полное меню
             vk.messages.send(
                 user_id=user_id,
                 message="👋 Рады видеть вас здесь!\n"
                         "⬇️ Выберите действие ниже",
                 random_id=0,
-                keyboard=main_menu_keyboard()
+                keyboard=main_menu_keyboard_full()
             )
             continue
 
         step = users[user_id]["step"]
+        has_ordered = users[user_id].get("has_ordered", False)
 
-        # Главное меню
-        if step == 0:
+        # Если пользователь уже делал заказ и находится в главном меню (step 0)
+        # показываем ему меню без кнопки "Заказ"
+        if step == 0 and has_ordered:
+            # Обработка сообщений от пользователя, который уже сделал заказ
             if text == "Частые вопросы":
                 users[user_id]["step"] = "faq"
                 vk.messages.send(
@@ -85,7 +101,67 @@ for event in longpoll.listen():
                     "Оплата производится сразу.\n"
                     "Цена самого товара + цена доставки\n\n"
                     "ТОВАР ВОЗВРАТУ И ОБМЕНУ НЕ ПОДЛЕЖИТ.\n\n" 
-                    "🤷Что делать, если я не знаю, что хочу?\n" 
+                    "🤷Что делать, если я не знаю, что я хочу?\n" 
+                    "Если вы затрудняетесь с выбором – мы с удовольствием поможем!\n"
+                    "Вы можете описать, что примерно вы хотели бы: в каком цвете, для каких целей и другие характеристики.\n"
+                    "Мы сделаем все возможное, чтобы вы нашли ту самую модель 🤍\n\n"
+                    "Если вы не нашли здесь свой вопрос, то напишите его и менеджер свяжется с вами!",
+                    random_id=0,
+                    keyboard=faq_keyboard()
+                )
+                continue
+
+            elif text == "О нас":
+                vk.messages.send(
+                    user_id=user_id,
+                    message="О НАС\n\n"
+                            "IFE — молодая компания, которая занимается продажей оригинальных кроссовок и одежды.\n"
+                            "Поставляем напрямую от производителя, так что в качестве можете не сомневаться.\n"
+                            "Готовы пройти любые проверки 🙌🏻\n\n"
+                            "У нас более 50 довольных клиентов.\n"
+                            "Отзывы можно посмотреть в разделе «Отзывы» в нашем сообществе.\n\n"
+                            "Мы готовы удовлетворить любой ваш запрос: редкая модель, необычный цвет, большой/маленький размер!\n\n"
+                            "Ждем вас в нашем сообществе!🤍",
+                    random_id=0,
+                    keyboard=main_menu_keyboard_no_order()
+                )
+                continue
+
+            elif text == "Заказ":
+                # Если пользователь уже делал заказ, не даем оформить новый
+                vk.messages.send(
+                    user_id=user_id,
+                    message="❌ Вы уже оформили заказ. Наш менеджер свяжется с вами в ближайшее время.",
+                    random_id=0,
+                    keyboard=main_menu_keyboard_no_order()
+                )
+                continue
+
+            else:
+                # Не реагируем на другие сообщения, просто игнорируем
+                continue
+
+        # Обычный пользователь, который еще не делал заказ
+        if step == 0 and not has_ordered:
+            if text == "Частые вопросы":
+                users[user_id]["step"] = "faq"
+                vk.messages.send(
+                    user_id=user_id,
+                    message="ЧАСТЫЕ ВОПРОСЫ\n\n"
+                    "💲Как формируется цена?\n" 
+                    "Формула расчета цены:\n"
+                    "(Стоимость товара*курс юаня) + 15% + стоимость доставки = итоговая цена\n\n"   
+                    "Мы заказываем из Китая с площадки Poizon, поэтому опираемся на курс юаня.\n"
+                    "15% - наша комиссия\n"
+                    "Стоимость доставки = 800 руб/кг\n\n"
+                    "📦Как долго будет идти товар?\n"
+                    "Доставка длится от 10 до 17 дней\n"
+                    "Мы будем на связи все время, пока товар не будет доставлен🙌🏻\n\n"
+                    "💰Что с оплатой?\n"
+                    "Оплата производится сразу.\n"
+                    "Цена самого товара + цена доставки\n\n"
+                    "ТОВАР ВОЗВРАТУ И ОБМЕНУ НЕ ПОДЛЕЖИТ.\n\n" 
+                    "🤷Что делать, если я не знаю, что я хочу?\n" 
                     "Если вы затрудняетесь с выбором – мы с удовольствием поможем!\n"
                     "Вы можете описать, что примерно вы хотели бы: в каком цвете, для каких целей и другие характеристики.\n"
                     "Мы сделаем все возможное, чтобы вы нашли ту самую модель 🤍\n\n"
@@ -116,28 +192,25 @@ for event in longpoll.listen():
                             "Мы готовы удовлетворить любой ваш запрос: редкая модель, необычный цвет, большой/маленький размер!\n\n"
                             "Ждем вас в нашем сообществе!🤍",
                     random_id=0,
-                    keyboard=main_menu_keyboard()
+                    keyboard=main_menu_keyboard_full()
                 )
                 continue
 
             else:
-                vk.messages.send(
-                    user_id=user_id,
-                    message="Выберите кнопку из меню.",
-                    random_id=0,
-                    keyboard=main_menu_keyboard()
-                )
+                # Если пользователь что-то пишет, а не использует кнопки, просто игнорируем
                 continue
 
-        # Раздел FAQ
+        # Раздел FAQ (работает для всех)
         if step == "faq":
             if text == "Назад":
                 users[user_id]["step"] = 0
+                # Показываем меню в зависимости от того, делал ли пользователь заказ
+                keyboard = main_menu_keyboard_no_order() if has_ordered else main_menu_keyboard_full()
                 vk.messages.send(
                     user_id=user_id,
                     message="👋 Главное меню:",
                     random_id=0,
-                    keyboard=main_menu_keyboard()
+                    keyboard=keyboard
                 )
                 continue
             elif text == "Другой вопрос":
@@ -152,7 +225,7 @@ for event in longpoll.listen():
                 wrong_input(user_id, faq_keyboard())
                 continue
 
-        # Пользователь пишет свой вопрос
+        # Пользователь пишет свой вопрос (работает для всех)
         if step == "custom_question":
             user_question = text
             # Отправляем администратору
@@ -161,16 +234,18 @@ for event in longpoll.listen():
                 message=f"❓ Новый вопрос от https://vk.com/id{user_id}:\n{user_question}",
                 random_id=0
             )
+            # Показываем меню в зависимости от того, делал ли пользователь заказ
+            keyboard = main_menu_keyboard_no_order() if has_ordered else main_menu_keyboard_full()
             vk.messages.send(
                 user_id=user_id,
                 message="✅ Ваш вопрос принят! Менеджер скоро свяжется с вами.",
                 random_id=0,
-                keyboard=main_menu_keyboard()
+                keyboard=keyboard
             )
             users[user_id]["step"] = 0
             continue
 
-        # Шаги оформления заказа
+        # Шаги оформления заказа (только для новых пользователей)
         if step == 1:
             users[user_id]["model"] = text
             users[user_id]["step"] = 2
@@ -229,10 +304,15 @@ for event in longpoll.listen():
                 random_id=0
             )
 
+            # Устанавливаем флаг, что пользователь сделал заказ
+            users[user_id]["has_ordered"] = True
+            
+            # Отправляем сообщение об успешном заказе с меню без кнопки "Заказ"
             vk.messages.send(
                 user_id=user_id,
-                message="✅ Заказ принят! Менеджер скоро свяжется.",
+                message="✅ Заказ принят! Менеджер скоро свяжется с вами.",
                 random_id=0,
-                keyboard=main_menu_keyboard()
+                keyboard=main_menu_keyboard_no_order()
             )
             users[user_id]["step"] = 0
+            continue
